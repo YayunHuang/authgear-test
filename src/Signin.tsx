@@ -10,7 +10,9 @@ import {
   Box,
   Button,
   ButtonGroup,
+  Checkbox,
   Container,
+  FormControlLabel,
   Grid,
   TextField,
   Typography,
@@ -26,7 +28,8 @@ const Signin: React.FC<ScreenProps> = (props) => {
   const [emailValue, setEmailValue] = useState("");
   const [signinType, setSigninType] = useState("email");
   const [signinMethod, setSigninMethod] = useState("password");
-  const [pwdValue, setPwdValue] = useState("")
+  const [pwdValue, setPwdValue] = useState("");
+  const [twoFAEnabled, setTwoFAEnabled] = useState(true);
 
   const { navigateToScreen } = props;
 
@@ -56,6 +59,14 @@ const Signin: React.FC<ScreenProps> = (props) => {
     []
   );
 
+  const handleTwoFAChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setTwoFAEnabled(event.target.checked);
+  };
+
+  const navigateToTOTPInput = (id: string, flowRef: string) => {
+    navigateToScreen({ name: "TOTPInput", flowId: id, flowRef: flowRef });
+  };
+
   const handleSubmit = useCallback(
     async (event: FormEvent) => {
       event.preventDefault();
@@ -68,6 +79,13 @@ const Signin: React.FC<ScreenProps> = (props) => {
               emailValue
             );
 
+            if (jsonData.error) {
+              window.alert("Something went wrong: " + JSON.stringify(jsonData.error.reason));
+              throw new Error(
+                "unexpected response: " + JSON.stringify(jsonData)
+              );
+            }
+
             const authentication = jsonData?.result?.flow_step?.authentication;
             const id = jsonData?.result?.id;
             const flowRef = jsonData?.result?.flow_reference?.type;
@@ -77,20 +95,32 @@ const Signin: React.FC<ScreenProps> = (props) => {
                 name: "OTPInput",
                 flowId: id,
                 flowRef: flowRef,
+                twoFAEnabled: twoFAEnabled,
               });
             }
           } else if (signinMethod === "password") {
-            const jsonData = await signinWithEmailAndPassword(
+            jsonData = await signinWithEmailAndPassword(
               window.location.search,
               emailValue,
               pwdValue
             );
+
+            if (jsonData.error) {
+              window.alert("Something went wrong: " + JSON.stringify(jsonData.error.reason));
+              throw new Error(
+                "unexpected response: " + JSON.stringify(jsonData)
+              );
+            }
             const finish_redirect_uri =
               jsonData?.result?.data?.finish_redirect_uri;
             if (jsonData?.result?.finished) window.alert("ok");
             if (typeof finish_redirect_uri === "string") {
               window.location.href = finish_redirect_uri;
             }
+
+            const id = jsonData?.result?.id;
+            const flowRef = jsonData?.result?.flow_reference?.type;
+            navigateToTOTPInput(id, flowRef);
           }
           break;
         case "phone":
@@ -100,32 +130,51 @@ const Signin: React.FC<ScreenProps> = (props) => {
               emailValue
             );
 
+            if (jsonData.error) {
+              window.alert("Something went wrong: " + JSON.stringify(jsonData.error.reason));
+              throw new Error(
+                "unexpected response: " + JSON.stringify(jsonData)
+              );
+            }
+
             const authentication = jsonData?.result?.flow_step?.authentication;
             const id = jsonData?.result?.id;
             const flowRef = jsonData?.result?.flow_reference?.type;
-
-            console.log("dataaaa", jsonData)
 
             if (authentication === "primary_oob_otp_sms" && id && flowRef) {
               navigateToScreen({
                 name: "OTPInput",
                 flowId: id,
                 flowRef: flowRef,
+                twoFAEnabled: twoFAEnabled,
               });
             }
           } else if (signinMethod === "password") {
-            const jsonData = await signinWithPhoneAndPassword(
+            jsonData = await signinWithPhoneAndPassword(
               window.location.search,
               emailValue,
               pwdValue
             );
+
+            if (jsonData.error) {
+              window.alert("Something went wrong: " + JSON.stringify(jsonData.error.reason));
+              throw new Error(
+                "unexpected response: " + JSON.stringify(jsonData)
+              );
+            }
+
             const finish_redirect_uri =
               jsonData?.result?.data?.finish_redirect_uri;
             if (jsonData?.result?.finished) window.alert("ok");
             if (typeof finish_redirect_uri === "string") {
               window.location.href = finish_redirect_uri;
             }
+
+            const id = jsonData?.result?.id;
+            const flowRef = jsonData?.result?.flow_reference?.type;
+            navigateToTOTPInput(id, flowRef);
           }
+          break;
       }
     },
     [emailValue, pwdValue]
@@ -190,6 +239,18 @@ const Signin: React.FC<ScreenProps> = (props) => {
               OTP
             </Button>
           </ButtonGroup>
+          <FormControlLabel
+            label="Enable 2FA"
+            sx={{ mt: 1 }}
+            control={
+              <Checkbox
+                disabled
+                checked={twoFAEnabled}
+                onChange={handleTwoFAChange}
+                inputProps={{ "aria-label": "controlled" }}
+              />
+            }
+          />
         </Grid>
         <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 1 }}>
           <TextField

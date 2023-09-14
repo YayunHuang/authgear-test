@@ -1,14 +1,13 @@
 import { ChangeEvent, FormEvent, useCallback, useMemo, useState } from "react";
-import {
-  signupWithEmail,
-  signupWithPhone,
-} from "./api";
+import { signupWithEmail, signupWithPhone } from "./api";
 import { ScreenComponent } from "./App";
 import {
   Box,
   Button,
   ButtonGroup,
+  Checkbox,
   Container,
+  FormControlLabel,
   Grid,
   TextField,
   Typography,
@@ -24,7 +23,8 @@ const Signup: React.FC<ScreenProps> = (props) => {
   const [emailValue, setEmailValue] = useState("");
   const [signupType, setSignupType] = useState("email");
   const [signupMethod, setSignupMethod] = useState("password");
-  const [pwdValue, setPwdValue] = useState("")
+  const [pwdValue, setPwdValue] = useState("");
+  const [twoFAEnabled, setTwoFAEnabled] = useState(true);
 
   const { navigateToScreen } = props;
 
@@ -62,6 +62,14 @@ const Signup: React.FC<ScreenProps> = (props) => {
     []
   );
 
+  const handleTwoFAChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setTwoFAEnabled(event.target.checked);
+  };
+
+  const generateSecretUri = (email: string, secret: string) => {
+    return `otpauth://totp/Authgear%20Test:${email}?secret=${secret}&issuer=Authgear%20Test&algorithm=SHA1&digits=6&period=30`;
+  };
+
   const handleSubmit = useCallback(
     async (event: FormEvent) => {
       event.preventDefault();
@@ -72,26 +80,53 @@ const Signup: React.FC<ScreenProps> = (props) => {
             window.location.search,
             emailValue,
             authenticationMethod,
+            twoFAEnabled,
             pwdValue
           );
+          if (jsonData.error) {
+            window.alert("Something went wrong: " + JSON.stringify(jsonData.error.reason));
+            throw new Error("unexpected response: " + JSON.stringify(jsonData));
+          }
           break;
         case "phone":
           jsonData = await signupWithPhone(
             window.location.search,
             emailValue,
             authenticationMethod,
-            pwdValue
+            pwdValue,
+            twoFAEnabled
           );
+          if (jsonData.error) {
+            window.alert("Something went wrong: " + JSON.stringify(jsonData.error.reason));
+            throw new Error("unexpected response: " + JSON.stringify(jsonData));
+          }
       }
       const id = jsonData?.result?.id;
       const flowRef = jsonData?.result?.flow_reference?.type;
+
+      if (signupMethod === "otp" && id && flowRef) {
+        navigateToScreen({
+          name: "OTPInput",
+          flowId: id,
+          flowRef: flowRef,
+          twoFAEnabled: twoFAEnabled,
+          emailValue: emailValue,
+        });
+      } else if (twoFAEnabled) {
+        const secret = jsonData?.result?.data?.secret;
+        const secretUri = generateSecretUri(emailValue, secret);
+        navigateToScreen({
+          name: "TOTPInput",
+          flowId: id,
+          flowRef: flowRef,
+          secretUri: secretUri,
+        });
+      }
+
       const finish_redirect_uri = jsonData?.result?.data?.finish_redirect_uri;
       if (jsonData?.result?.finished) window.alert("ok");
       if (typeof finish_redirect_uri === "string") {
         window.location.href = finish_redirect_uri;
-      }
-      else if (signupMethod === "otp" && id && flowRef) {
-        navigateToScreen({ name: "OTPInput", flowId: id, flowRef: flowRef });
       }
     },
     [emailValue, pwdValue]
@@ -156,6 +191,18 @@ const Signup: React.FC<ScreenProps> = (props) => {
               OTP
             </Button>
           </ButtonGroup>
+          <FormControlLabel
+            label="Enable 2FA"
+            sx={{ mt: 1 }}
+            control={
+              <Checkbox
+                disabled
+                checked={twoFAEnabled}
+                onChange={handleTwoFAChange}
+                inputProps={{ "aria-label": "controlled" }}
+              />
+            }
+          />
         </Grid>
         <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 1 }}>
           <TextField

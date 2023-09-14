@@ -11,7 +11,9 @@ import {
   Box,
   Button,
   ButtonGroup,
+  Checkbox,
   Container,
+  FormControlLabel,
   Grid,
   TextField,
   Typography,
@@ -22,12 +24,21 @@ interface ScreenProps {
   navigateBack: () => void;
   flowRef?: string;
   currentScreen: ScreenComponent;
+  twoFAEnabled?: boolean;
+  emailValue: string;
 }
 
 const OTPInput: React.FC<ScreenProps> = (props) => {
   const [OTPValue, setOTPValue] = useState("");
 
-  const { navigateBack, currentScreen, flowRef, navigateToScreen } = props;
+  const {
+    navigateBack,
+    currentScreen,
+    flowRef,
+    navigateToScreen,
+    twoFAEnabled,
+    emailValue,
+  } = props;
 
   const handleOTPChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -41,6 +52,10 @@ const OTPInput: React.FC<ScreenProps> = (props) => {
     await resendOTP(currentScreen.flowId ?? "");
   }, []);
 
+  const generateSecretUri = (email: string, secret: string) => {
+    return `otpauth://totp/Authgear%20Test:${email}?secret=${secret}&issuer=Authgear%20Test&algorithm=SHA1&digits=6&period=30`;
+  };
+
   const handleOTPSubmit = useCallback(
     async (event: FormEvent) => {
       event.preventDefault();
@@ -52,17 +67,41 @@ const OTPInput: React.FC<ScreenProps> = (props) => {
             OTPValue,
             currentScreen.flowId ?? ""
           );
+
+          if (jsonData.error) {
+            window.alert("Something went wrong: " + JSON.stringify(jsonData.error.reason));
+            throw new Error("unexpected response: " + JSON.stringify(jsonData));
+          }
           const finish_redirect_uri =
             jsonData?.result?.data?.finish_redirect_uri;
           if (typeof finish_redirect_uri === "string") {
             window.location.href = finish_redirect_uri;
           }
+          if (twoFAEnabled) {
+            const id = jsonData?.result?.id;
+            const newFlowRef = jsonData?.result?.flow_reference?.type;
+            navigateToScreen({
+              name: "TOTPInput",
+              flowId: id,
+              flowRef: newFlowRef,
+            });
+          }
           break;
         case "signup_flow":
-          jsonData = await signupWithOTP(OTPValue, currentScreen.flowId ?? "");
+          jsonData = await signupWithOTP(
+            OTPValue,
+            currentScreen.flowId ?? "",
+            twoFAEnabled ?? false
+          );
+
+          if (jsonData.error) {
+            window.alert("Something went wrong: " + JSON.stringify(jsonData.error.reason));
+            throw new Error("unexpected response: " + JSON.stringify(jsonData));
+          }
           const type = jsonData?.result?.flow_step?.type;
           const id = jsonData?.result?.id;
           const newFlowRef = jsonData?.result?.flow_reference?.type;
+
           const finished = jsonData?.result?.finished;
           if (jsonData?.result?.finished) window.alert("ok");
           if (finished) {
@@ -73,15 +112,31 @@ const OTPInput: React.FC<ScreenProps> = (props) => {
             }
           }
 
-          if (type === "verify" && id && newFlowRef) {
+          if (twoFAEnabled) {
+            const secret = jsonData?.result?.data?.secret;
+            const secretUri = generateSecretUri(emailValue, secret);
+
+            navigateToScreen({
+              name: "TOTPInput",
+              flowId: id,
+              flowRef: newFlowRef,
+              secretUri: secretUri,
+            });
+          } else if (type === "verify" && id && newFlowRef) {
             navigateToScreen({
               name: "OTPInput",
               flowId: id,
               flowRef: newFlowRef,
+              emailValue: emailValue,
             });
-          }
-          if (type === "authenticate" && id && newFlowRef) {
+          } else if (type === "authenticate" && id && newFlowRef) {
             const newJsonData = await otpAuthentication(id);
+            if (newJsonData.error) {
+              window.alert("Something went wrong: " + JSON.stringify(jsonData.error.reason));
+            throw new Error(
+                "unexpected response: " + JSON.stringify(jsonData)
+              );
+            }
             const newId = newJsonData?.result?.id;
             const newFlowRef = newJsonData?.result?.flow_reference?.type;
             navigateToScreen({
@@ -112,31 +167,29 @@ const OTPInput: React.FC<ScreenProps> = (props) => {
         <Grid container>
           <ButtonGroup fullWidth aria-label="outlined primary button group">
             <Button
-              variant="outlined"
+              variant={flowRef === "signup_flow" ? "contained" : "outlined"}
               onClick={() => navigateToScreen({ name: "Signup" })}
             >
               Sign up
             </Button>
-            <Button variant="contained">Sign in</Button>
-          </ButtonGroup>
-          {/* <ButtonGroup fullWidth>
             <Button
-              fullWidth
-              variant="outlined"
-              sx={{ mt: 3 }}
+              variant={flowRef === "login_flow" ? "contained" : "outlined"}
               onClick={() => navigateToScreen({ name: "Login" })}
             >
-              Password
+              Sign in
             </Button>
-            <Button
-              fullWidth
-              variant="contained"
-              sx={{ mt: 3 }}
-              onClick={() => navigateToScreen({ name: "EmailAndOTPLogin" })}
-            >
-              OTP
-            </Button>
-          </ButtonGroup> */}
+          </ButtonGroup>
+          <FormControlLabel
+            label="Enable 2FA"
+            sx={{ mt: 1 }}
+            control={
+              <Checkbox
+                disabled
+                checked={twoFAEnabled}
+                inputProps={{ "aria-label": "controlled" }}
+              />
+            }
+          />
         </Grid>
         <Box
           component="form"

@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from "react";
 import "./App.css";
-import EmailAndPwdLoginScreen from "./EmailAndPwdLogin";
-import EmailAndOTPLogin from "./EmailAndOTPLogin";
 import OTPInput from "./OTPInput";
 import Signup from "./Signup";
 import Signin from "./Signin";
+import TOTPInput from "./TOTPInput";
 
 export interface ScreenComponent {
   name: string;
   flowId?: string;
   flowRef?: string;
-  option?: string;
+  twoFAEnabled?: boolean;
+  secretUri?: string;
+  emailValue?: string;
 }
 
 const App: React.FC = () => {
@@ -45,24 +46,6 @@ const App: React.FC = () => {
 
   const renderCurrentScreen = () => {
     switch (currentScreen.name) {
-      case "EmailAndPwdLogin":
-        return (
-          <EmailAndPwdLoginScreen
-            navigateToScreen={navigateToScreen}
-            navigateBack={navigateBack}
-            currentScreen={currentScreen}
-            accountMethod="Email"
-            loginMethod="password"
-          />
-        );
-      case "EmailAndOTPLogin":
-        return (
-          <EmailAndOTPLogin
-            navigateToScreen={navigateToScreen}
-            navigateBack={navigateBack}
-            currentScreen={currentScreen}
-          />
-        );
       case "Login":
         return (
           <Signin
@@ -79,6 +62,8 @@ const App: React.FC = () => {
             navigateBack={navigateBack}
             currentScreen={currentScreen}
             flowRef={currentScreen.flowRef}
+            twoFAEnabled={currentScreen.twoFAEnabled}
+            emailValue={currentScreen.emailValue ?? ""}
           />
         );
       case "Signup":
@@ -87,6 +72,16 @@ const App: React.FC = () => {
             navigateToScreen={navigateToScreen}
             navigateBack={navigateBack}
             currentScreen={currentScreen}
+          />
+        );
+      case "TOTPInput":
+        return (
+          <TOTPInput
+            navigateToScreen={navigateToScreen}
+            navigateBack={navigateBack}
+            currentScreen={currentScreen}
+            flowRef={currentScreen.flowRef}
+            secretUri={currentScreen.secretUri ?? ""}
           />
         );
       default:

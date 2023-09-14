@@ -113,7 +113,8 @@ export const signupWithEmail = async (
   query: string,
   emailValue: string,
   authenticationMethod: string,
-  pwdValue?: string,
+  twoFAEnabled: boolean,
+  pwdValue?: string
 ) => {
   const batchInput =
     authenticationMethod === "primary_password"
@@ -126,6 +127,11 @@ export const signupWithEmail = async (
             authentication: authenticationMethod,
             new_password: pwdValue,
           },
+          twoFAEnabled
+            ? {
+                authentication: "secondary_totp",
+              }
+            : null,
         ]
       : [
           {
@@ -149,7 +155,7 @@ export const signupWithEmail = async (
           type: "signup_flow",
           id: "default",
         },
-        batch_input: batchInput
+        batch_input: batchInput,
       }),
     }
   );
@@ -163,6 +169,7 @@ export const signupWithPhone = async (
   phoneValue: string,
   authenticationMethod: string,
   pwdValue: string,
+  twoFAEnabled: boolean
 ) => {
   const batchInput =
     authenticationMethod === "primary_password"
@@ -175,6 +182,11 @@ export const signupWithPhone = async (
             authentication: authenticationMethod,
             new_password: pwdValue,
           },
+          twoFAEnabled
+            ? {
+                authentication: "secondary_totp",
+              }
+            : null,
         ]
       : [
           {
@@ -201,7 +213,7 @@ export const signupWithPhone = async (
           type: "signup_flow",
           id: "default",
         },
-        batch_input: batchInput
+        batch_input: batchInput,
       }),
     }
   );
@@ -210,8 +222,11 @@ export const signupWithPhone = async (
   return jsonData;
 };
 
-
-export const signupWithOTP = async (OTPValue: string, flowId: string) => {
+export const signupWithOTP = async (
+  OTPValue: string,
+  flowId: string,
+  twoFAEnabled: boolean
+) => {
   const resp = await fetch(
     `https://cube-crisp-110.authgear-staging.com/api/v1/authentication_flows/${flowId}`,
     {
@@ -225,6 +240,11 @@ export const signupWithOTP = async (OTPValue: string, flowId: string) => {
           {
             code: OTPValue,
           },
+          twoFAEnabled
+            ? {
+                authentication: "secondary_totp",
+              }
+            : null,
         ],
       }),
     }
@@ -232,7 +252,6 @@ export const signupWithOTP = async (OTPValue: string, flowId: string) => {
   const jsonData = await resp.json();
   return jsonData;
 };
-
 
 export const otpAuthentication = async (flowId: string) => {
   const resp = await fetch(
@@ -281,9 +300,8 @@ export const signinWithPhoneAndOTP = async (
           },
           {
             authentication: "primary_oob_otp_sms",
-          },
-          {
             channel: "sms",
+            index: 0,
           },
         ],
       }),
@@ -330,3 +348,54 @@ export const signinWithPhoneAndPassword = async (
   return jsonData;
 };
 
+export const submitTOTP = async (
+  flowId: string,
+  TOTPValue: string,
+  displayName: string
+) => {
+  const resp = await fetch(
+    `https://cube-crisp-110.authgear-staging.com/api/v1/authentication_flows/${flowId}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        bind_user_agent: false,
+        batch_input: [
+          {
+            code: TOTPValue,
+            display_name: displayName,
+          },
+        ],
+      }),
+    }
+  );
+
+  const jsonData = await resp.json();
+  return jsonData;
+};
+
+export const signinWithTOTP = async (flowId: string, TOTPValue: string) => {
+  const resp = await fetch(
+    `https://cube-crisp-110.authgear-staging.com/api/v1/authentication_flows/${flowId}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        bind_user_agent: false,
+        batch_input: [
+          {
+            code: TOTPValue,
+            authentication: "secondary_totp",
+          },
+        ],
+      }),
+    }
+  );
+
+  const jsonData = await resp.json();
+  return jsonData;
+};
